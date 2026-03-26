@@ -1,0 +1,15 @@
+node_modules/
+dist/
+.env
+.env.local
+backend/venv/
+__pycache__/
+*.pyc
+.DS_Store
+
+# Sample data - not part of the app
+Public Policies/
+Audit Questions.pdf
+frontend/src/assets/
+frontend/public/favicon.svg
+frontend/public/icons.svg
