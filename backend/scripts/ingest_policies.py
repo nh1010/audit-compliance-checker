@@ -6,8 +6,11 @@ Usage:
     python -m scripts.ingest_policies              # ingest new PDFs only
     python -m scripts.ingest_policies --force       # re-ingest all PDFs
     python -m scripts.ingest_policies path/to.pdf   # ingest specific files
+
+Set R2_BUCKET to sync PDFs from Cloudflare R2 before ingestion.
 """
 
+import os
 import sys
 import time
 import logging
@@ -22,6 +25,44 @@ logger = logging.getLogger(__name__)
 CHUNK_SIZE = 800
 CHUNK_OVERLAP = 200
 POLICIES_DIR = Path(__file__).resolve().parents[1] / "policies"
+
+
+def sync_from_r2() -> None:
+    """Download any new PDFs from Cloudflare R2 that aren't already in POLICIES_DIR."""
+    bucket_name = os.environ.get("R2_BUCKET")
+    if not bucket_name:
+        return
+
+    import boto3
+
+    s3 = boto3.client(
+        "s3",
+        endpoint_url=os.environ["R2_ENDPOINT_URL"],
+        aws_access_key_id=os.environ["R2_ACCESS_KEY_ID"],
+        aws_secret_access_key=os.environ["R2_SECRET_ACCESS_KEY"],
+        region_name="auto",
+    )
+
+    prefix = os.environ.get("R2_PREFIX", "")
+    POLICIES_DIR.mkdir(parents=True, exist_ok=True)
+    local_files = {f.name for f in POLICIES_DIR.glob("*.pdf")}
+
+    paginator = s3.get_paginator("list_objects_v2")
+    downloaded = 0
+    for page in paginator.paginate(Bucket=bucket_name, Prefix=prefix):
+        for obj in page.get("Contents", []):
+            key = obj["Key"]
+            if not key.lower().endswith(".pdf"):
+                continue
+            filename = Path(key).name
+            if filename in local_files:
+                continue
+            dest = POLICIES_DIR / filename
+            s3.download_file(bucket_name, key, str(dest))
+            downloaded += 1
+
+    logger.info("R2 sync: %d new PDFs downloaded from %s/%s",
+                downloaded, bucket_name, prefix)
 
 
 def chunk_text(text: str, size: int = CHUNK_SIZE, overlap: int = CHUNK_OVERLAP) -> list[str]:
@@ -89,6 +130,8 @@ def _ingested_source_files(collection) -> set[str]:
 
 
 def main(pdf_paths: list[Path] | None = None, force: bool = False):
+    sync_from_r2()
+
     if pdf_paths is None:
         pdf_paths = sorted(POLICIES_DIR.rglob("*.pdf"))
 
