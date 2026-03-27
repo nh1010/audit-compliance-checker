@@ -1,7 +1,8 @@
+import asyncio
 import json
 import os
 import logging
-from typing import AsyncGenerator
+from typing import AsyncGenerator, Callable
 
 from google import genai
 from google.genai import types
@@ -10,26 +11,26 @@ from app.models.schemas import ParsedQuestion, AnalysisResult
 
 logger = logging.getLogger(__name__)
 
-BATCH_SIZE = 5
+BATCH_SIZE = 1
 
 SYSTEM_PROMPT = """You are a healthcare compliance auditor. You are given:
 1. A set of audit questions about whether an organization's Policies & Procedures (P&P) meet specific regulatory requirements.
-2. The full text of one or more P&P documents.
+2. Relevant excerpts retrieved from P&P documents (each labelled with its policy ID and page).
 
-For each audit question, determine whether the requirement is met by the provided policies.
+For each audit question, determine whether the requirement is met by the provided policy excerpts.
 
 Respond with a JSON array. Each element must have exactly these fields:
 - "question_number": the question number (integer)
 - "status": one of "met", "not_met", or "partial"
 - "evidence": the exact quote from the policy that addresses the requirement (empty string if not_met)
 - "policy_source": the policy document ID where the evidence was found (e.g. "GG.1508") (empty string if not_met)
-- "page": the approximate page reference if identifiable (e.g. "Page 10 of 25"), otherwise empty string
+- "page": the page reference from the excerpt metadata (e.g. "Page 10"), otherwise empty string
 - "confidence": one of "high", "medium", or "low"
 
 Rules:
 - "met" means the policy clearly and fully addresses every element of the requirement.
 - "partial" means the policy addresses some but not all elements, or the language is ambiguous.
-- "not_met" means no relevant language was found in any provided policy.
+- "not_met" means no relevant language was found in any provided excerpt.
 - For the evidence field, quote the actual policy text verbatim. Keep it concise (1-3 sentences).
 - Be precise and conservative. If unsure, use "partial" with "medium" or "low" confidence.
 - Return ONLY the JSON array, no other text."""
@@ -42,12 +43,24 @@ def _get_client() -> genai.Client:
     return genai.Client(api_key=api_key)
 
 
-def _build_prompt(questions: list[ParsedQuestion], policy_texts: dict[str, str]) -> str:
+def _build_prompt(
+    questions: list[ParsedQuestion],
+    chunks: list[dict],
+) -> str:
     parts = []
 
-    parts.append("=== POLICY DOCUMENTS ===\n")
-    for pid, text in policy_texts.items():
-        parts.append(f"--- Policy: {pid} ---\n{text}\n")
+    parts.append("=== RELEVANT POLICY EXCERPTS ===\n")
+    for i, chunk in enumerate(chunks, 1):
+        pid = chunk.get("policy_id", "unknown")
+        page = chunk.get("page", "")
+        title = chunk.get("title", "")
+        header = f"--- Excerpt {i} | Policy: {pid}"
+        if title:
+            header += f" | {title}"
+        if page:
+            header += f" | {page}"
+        header += " ---"
+        parts.append(f"{header}\n{chunk['text']}\n")
 
     parts.append("\n=== AUDIT QUESTIONS ===\n")
     for q in questions:
@@ -119,14 +132,24 @@ def _parse_response(text: str, expected_numbers: list[int]) -> list[AnalysisResu
     return sorted(results, key=lambda r: r.question_number)
 
 
-async def analyze_batch(
+def _analyze_batch_sync(
     questions: list[ParsedQuestion],
-    policy_texts: dict[str, str],
+    search_fn: Callable[[str], list[dict]],
 ) -> list[AnalysisResult]:
-    """Analyze a batch of questions against the policy texts."""
+    """Synchronous core — runs in a thread pool to avoid blocking the event loop."""
     client = _get_client()
 
-    prompt = _build_prompt(questions, policy_texts)
+    all_chunks: list[dict] = []
+    seen_texts: set[str] = set()
+    for q in questions:
+        query = f"{q.text} {q.reference}".strip()
+        results = search_fn(query)
+        for chunk in results:
+            if chunk["text"] not in seen_texts:
+                seen_texts.add(chunk["text"])
+                all_chunks.append(chunk)
+
+    prompt = _build_prompt(questions, all_chunks)
     expected = [q.number for q in questions]
 
     response = client.models.generate_content(
@@ -142,11 +165,14 @@ async def analyze_batch(
 
 async def analyze_all(
     questions: list[ParsedQuestion],
-    policy_texts: dict[str, str],
+    search_fn: Callable[[str], list[dict]],
 ) -> AsyncGenerator[AnalysisResult, None]:
-    """Analyze all questions in batches, yielding results as they complete."""
+    """Analyze all questions, yielding each result as it completes."""
+    loop = asyncio.get_event_loop()
     for i in range(0, len(questions), BATCH_SIZE):
         batch = questions[i : i + BATCH_SIZE]
-        results = await analyze_batch(batch, policy_texts)
+        results = await loop.run_in_executor(
+            None, _analyze_batch_sync, batch, search_fn
+        )
         for r in results:
             yield r

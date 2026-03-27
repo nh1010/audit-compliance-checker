@@ -5,7 +5,6 @@ import tempfile
 from fastapi import APIRouter, UploadFile, HTTPException
 
 from app.models.schemas import UploadResponse
-from app.services.pdf_parser import parse_policy_metadata
 
 router = APIRouter()
 
@@ -28,16 +27,7 @@ async def upload_file(file: UploadFile):
     with open(dest, "wb") as f:
         f.write(content)
 
-    try:
-        metadata = parse_policy_metadata(dest)
-    except Exception:
-        metadata = {"policy_id": "", "title": ""}
-
-    return UploadResponse(
-        file_id=file_id,
-        filename=file.filename,
-        metadata=metadata,
-    )
+    return UploadResponse(file_id=file_id, filename=file.filename)
 
 
 def get_upload_path(file_id: str) -> str:

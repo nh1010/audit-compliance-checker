@@ -1,0 +1,40 @@
+---
+description: Python backend conventions for FastAPI services
+globs: backend/**/*.py
+alwaysApply: false
+---
+
+# Backend Python Conventions
+
+## Project layout
+
+```
+backend/
+  app/
+    main.py          — FastAPI app, CORS, router mounts
+    models/schemas.py — all Pydantic request/response models
+    routers/          — thin route handlers (upload, audit, analyze)
+    services/         — business logic (pdf_parser, vector_store, gemini)
+  scripts/            — CLI tools (ingest_policies)
+```
+
+## Patterns to follow
+
+- Route handlers validate input via Pydantic models and delegate to services
+- Services are importable functions/classes, not router-aware
+- Use `async def` for route handlers; blocking I/O (pdfplumber, chromadb) runs in the default thread pool via `asyncio.to_thread` or is acceptable in the current single-worker setup
+- SSE responses use `StreamingResponse(media_type="text/event-stream")` with `data: {json}\n\n` format
+- Error responses: raise `HTTPException` with meaningful status codes (400 bad request, 422 parse failure, 500 service error)
+
+## Gemini integration
+
+- Batch size is 5 questions per Gemini call — adjustable but keep batching to avoid rate limits
+- System prompt requires structured JSON array output — always validate/coerce the response
+- Missing questions in Gemini's response should be backfilled as `not_met` with an error evidence string
+
+## Vector store
+
+- Collection name: `policies`
+- Embedding model: `gemini-embedding-001` via custom `GoogleEmbeddingFunction`
+- Chunk metadata must include: `policy_id`, `title`, `section`, `source_file`
+- Dedup retrieved chunks by text content before sending to Gemini

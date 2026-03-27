@@ -3,20 +3,19 @@ import { useNavigate } from "react-router-dom";
 import { ArrowRight, ShieldCheck } from "lucide-react";
 import FileUpload from "@/components/FileUpload";
 import { uploadFile, parseAudit } from "@/lib/api";
-import type { ParsedQuestion, PolicyMetadata } from "@/lib/types";
+import type { ParsedQuestion } from "@/lib/types";
 
 interface Props {
-  onReady: (questions: ParsedQuestion[], policies: PolicyMetadata[]) => void;
+  onReady: (questions: ParsedQuestion[]) => void;
 }
 
 export default function Home({ onReady }: Props) {
   const navigate = useNavigate();
   const [auditFiles, setAuditFiles] = useState<File[]>([]);
-  const [policyFiles, setPolicyFiles] = useState<File[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const canStart = auditFiles.length === 1 && policyFiles.length > 0;
+  const canStart = auditFiles.length === 1;
 
   async function handleStart() {
     if (!canStart) return;
@@ -27,18 +26,7 @@ export default function Home({ onReady }: Props) {
       const auditUpload = await uploadFile(auditFiles[0]);
       const questions = await parseAudit(auditUpload.file_id);
 
-      const policies: PolicyMetadata[] = [];
-      for (const f of policyFiles) {
-        const res = await uploadFile(f);
-        policies.push({
-          file_id: res.file_id,
-          filename: res.filename,
-          policy_id: res.metadata.policy_id,
-          title: res.metadata.title,
-        });
-      }
-
-      onReady(questions, policies);
+      onReady(questions);
       navigate("/results");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Something went wrong");
@@ -49,38 +37,30 @@ export default function Home({ onReady }: Props) {
 
   return (
     <div className="min-h-screen flex flex-col">
-      <header className="border-b border-slate-200 bg-white">
+      <header className="border-b border-border bg-surface">
         <div className="max-w-5xl mx-auto px-6 py-4 flex items-center gap-3">
           <ShieldCheck className="w-7 h-7 text-primary" />
-          <h1 className="text-lg font-bold text-slate-800">Audit Compliance Checker</h1>
+          <h1 className="text-lg font-bold text-text">Audit Compliance Checker</h1>
         </div>
       </header>
 
       <main className="flex-1 max-w-5xl mx-auto w-full px-6 py-10">
         <div className="text-center mb-10">
-          <h2 className="text-3xl font-bold text-slate-900 mb-2">
+          <h2 className="text-3xl font-bold text-text mb-2">
             Check Policy Compliance
           </h2>
-          <p className="text-slate-500 max-w-xl mx-auto">
-            Upload your audit questionnaire and policy documents. We'll analyze each
-            requirement and surface the evidence from your policies.
+          <p className="text-text-muted max-w-xl mx-auto">
+            Upload your audit questionnaire and we'll check it against the indexed
+            policy documents to surface evidence and compliance status.
           </p>
         </div>
 
-        <div className="grid md:grid-cols-2 gap-8 mb-8">
+        <div className="max-w-md mx-auto mb-8">
           <FileUpload
             label="Audit Questions"
             description="Single PDF with audit questionnaire"
             files={auditFiles}
             onFiles={setAuditFiles}
-            loading={loading}
-          />
-          <FileUpload
-            label="Policy Documents"
-            description="One or more P&P PDFs to check against"
-            multiple
-            files={policyFiles}
-            onFiles={setPolicyFiles}
             loading={loading}
           />
         </div>
@@ -99,7 +79,7 @@ export default function Home({ onReady }: Props) {
               inline-flex items-center gap-2 px-6 py-3 rounded-xl text-sm font-semibold transition-all
               ${canStart && !loading
                 ? "bg-primary text-white hover:bg-primary-dark cursor-pointer shadow-md hover:shadow-lg"
-                : "bg-slate-200 text-slate-400 cursor-not-allowed"}
+                : "bg-surface text-text-faint cursor-not-allowed"}
             `}
           >
             {loading ? "Uploading..." : "Start Analysis"}

@@ -3,13 +3,12 @@ dist/
 .env
 .env.local
 backend/venv/
+backend/policies/
+backend/data/
 __pycache__/
 *.pyc
 .DS_Store
 
-# Sample data - not part of the app
+# Sample data
+*.pdf
 Public Policies/
-Audit Questions.pdf
-frontend/src/assets/
-frontend/public/favicon.svg
-frontend/public/icons.svg

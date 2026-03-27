@@ -1,24 +1,37 @@
-import { useState } from "react";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
-import Home from "@/pages/Home";
-import Results from "@/pages/Results";
-import type { ParsedQuestion, PolicyMetadata } from "@/lib/types";
+import { useAudit } from "@/hooks/useAudit";
+import UploadScreen from "@/components/UploadScreen";
+import ScanScreen from "@/components/ScanScreen";
+import DebriefScreen from "@/components/DebriefScreen";
+import ReadilyLogo from "@/components/ReadilyLogo";
 
 export default function App() {
-  const [questions, setQuestions] = useState<ParsedQuestion[]>([]);
-  const [policies, setPolicies] = useState<PolicyMetadata[]>([]);
-
-  function handleReady(q: ParsedQuestion[], p: PolicyMetadata[]) {
-    setQuestions(q);
-    setPolicies(p);
-  }
+  const { screen, questions, runDemo, runReal, goDebrief, restart } = useAudit();
 
   return (
-    <BrowserRouter>
-      <Routes>
-        <Route path="/" element={<Home onReady={handleReady} />} />
-        <Route path="/results" element={<Results questions={questions} policies={policies} />} />
-      </Routes>
-    </BrowserRouter>
+    <div className="min-h-screen bg-bg">
+      {screen !== "upload" && (
+        <nav className="sticky top-0 z-20 border-b border-border bg-surface/80 backdrop-blur-lg">
+          <div className="max-w-5xl mx-auto px-6 py-3.5 flex items-center justify-between">
+            <ReadilyLogo />
+            <button
+              onClick={restart}
+              className="text-xs font-medium text-txt-3 hover:text-primary transition-colors cursor-pointer"
+            >
+              New audit
+            </button>
+          </div>
+        </nav>
+      )}
+
+      {screen === "upload" && (
+        <UploadScreen onFileSelect={runReal} onDemo={runDemo} />
+      )}
+      {screen === "scanning" && (
+        <ScanScreen questions={questions} onComplete={goDebrief} />
+      )}
+      {screen === "debrief" && (
+        <DebriefScreen questions={questions} onRestart={restart} />
+      )}
+    </div>
   );
 }

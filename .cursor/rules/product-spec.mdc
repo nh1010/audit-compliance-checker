@@ -1,0 +1,55 @@
+---
+description: Core product specification and requirements for the audit compliance checker
+alwaysApply: true
+---
+
+# Audit Compliance Checker — Product Spec
+
+## What This App Does
+
+Healthcare organizations must demonstrate compliance with regulatory requirements during audits by providing policy excerpts as evidence. This app:
+
+1. Lets a user **upload a PDF of audit questions** (e.g. DHCS audit questionnaires).
+2. **Extracts the questions** into a structured numbered list with optional regulatory references.
+3. For each question, **shows whether the requirement is met** (`met`, `not_met`, `partial`) along with **evidence** (verbatim policy excerpt), **policy source**, **page number**, and **confidence level**.
+
+## Core Data Flow (Do Not Break)
+
+```
+Upload PDF → parse questions → vector search policies → Gemini analysis → SSE stream → Results UI
+```
+
+1. `POST /api/upload` — accept PDF, return `file_id`
+2. `POST /api/audit/parse` — extract numbered questions from that PDF
+3. `POST /api/analyze` — for each question, retrieve relevant policy chunks from ChromaDB, batch-send to Gemini, stream results as SSE
+
+## API Contracts (Keep in Sync)
+
+Backend schemas (`backend/app/models/schemas.py`) and frontend types (`frontend/src/lib/types.ts`) must stay aligned:
+
+- `ParsedQuestion`: `{ number, text, reference }`
+- `AnalysisResult`: `{ question_number, status, evidence, policy_source, page, confidence }`
+- `UploadResponse`: `{ file_id, filename }`
+- `status` enum: `"met" | "not_met" | "partial"` — no other values
+- `confidence` enum: `"high" | "medium" | "low"` — no other values
+
+When changing a schema field on one side, update the other side in the same change.
+
+## Required UI Capabilities
+
+- Drag-and-drop or click-to-upload PDF on the Home page
+- Progress indicator during analysis (SSE streaming)
+- Summary cards showing met / not_met / partial / pending counts
+- Filter chips to narrow results by status
+- Expandable result rows with evidence, source, page, confidence
+- CSV export of results
+
+## Stretch Features to Consider
+
+When adding new features, prioritize these directions:
+
+- **Policy selection**: let users choose which policy documents to search against (not just "all policies in the collection")
+- **Questionnaire workflow**: allow users to review, edit, or confirm extracted questions before analysis
+- **Session persistence**: save upload + results so users can return to previous audits
+- **Multi-file upload**: upload multiple audit PDFs in one session
+- **Confidence thresholds**: flag low-confidence results for human review

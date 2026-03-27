@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { ShieldCheck, ArrowLeft, Download, Filter } from "lucide-react";
-import type { ParsedQuestion, PolicyMetadata, AnalysisResult } from "@/lib/types";
+import type { ParsedQuestion, AnalysisResult } from "@/lib/types";
 import { analyzeCompliance } from "@/lib/api";
 import SummaryCards from "@/components/SummaryCards";
 import ProgressBar from "@/components/ProgressBar";
@@ -9,12 +9,11 @@ import ResultRow from "@/components/ResultRow";
 
 interface Props {
   questions: ParsedQuestion[];
-  policies: PolicyMetadata[];
 }
 
 type StatusFilter = "all" | "met" | "not_met" | "partial" | "pending";
 
-export default function Results({ questions, policies }: Props) {
+export default function Results({ questions }: Props) {
   const navigate = useNavigate();
   const [results, setResults] = useState<AnalysisResult[]>([]);
   const [analyzing, setAnalyzing] = useState(false);
@@ -23,17 +22,16 @@ export default function Results({ questions, policies }: Props) {
   const started = useRef(false);
 
   const runAnalysis = useCallback(() => {
-    if (questions.length === 0 || policies.length === 0) return;
+    if (questions.length === 0) return;
     setAnalyzing(true);
     setError("");
     analyzeCompliance(
       questions,
-      policies.map(p => p.file_id),
       (result) => setResults(prev => [...prev, result]),
       () => setAnalyzing(false),
       (err) => { setError(err); setAnalyzing(false); },
     );
-  }, [questions, policies]);
+  }, [questions]);
 
   useEffect(() => {
     if (!started.current && questions.length > 0) {
@@ -78,7 +76,7 @@ export default function Results({ questions, policies }: Props) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
-          <p className="text-slate-500 mb-4">No audit questions loaded.</p>
+          <p className="text-text-muted mb-4">No audit questions loaded.</p>
           <button onClick={() => navigate("/")} className="text-primary font-medium hover:underline">
             Go back and upload files
           </button>
@@ -89,12 +87,12 @@ export default function Results({ questions, policies }: Props) {
 
   return (
     <div className="min-h-screen flex flex-col">
-      <header className="border-b border-slate-200 bg-white sticky top-0 z-10">
+      <header className="border-b border-border bg-surface sticky top-0 z-10">
         <div className="max-w-5xl mx-auto px-6 py-4 flex items-center gap-3">
           <ShieldCheck className="w-7 h-7 text-primary" />
-          <h1 className="text-lg font-bold text-slate-800">Audit Compliance Checker</h1>
+          <h1 className="text-lg font-bold text-text">Audit Compliance Checker</h1>
           <div className="flex-1" />
-          <button onClick={() => navigate("/")} className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700">
+          <button onClick={() => navigate("/")} className="inline-flex items-center gap-1 text-sm text-text-muted hover:text-text">
             <ArrowLeft className="w-4 h-4" /> New Audit
           </button>
         </div>
@@ -113,13 +111,13 @@ export default function Results({ questions, policies }: Props) {
 
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Filter className="w-4 h-4 text-slate-400" />
+            <Filter className="w-4 h-4 text-text-faint" />
             {(["all", "met", "not_met", "partial", "pending"] as StatusFilter[]).map(f => (
               <button
                 key={f}
                 onClick={() => setFilter(f)}
                 className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
-                  filter === f ? "bg-primary text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                  filter === f ? "bg-primary text-white" : "bg-surface text-text-muted hover:bg-border"
                 }`}
               >
                 {f === "all" ? "All" : f === "not_met" ? "Not Met" : f.charAt(0).toUpperCase() + f.slice(1)}
@@ -129,7 +127,7 @@ export default function Results({ questions, policies }: Props) {
           <button
             onClick={exportCSV}
             disabled={results.length === 0}
-            className="inline-flex items-center gap-1 text-sm text-primary hover:underline disabled:text-slate-300 disabled:no-underline"
+            className="inline-flex items-center gap-1 text-sm text-primary hover:underline disabled:text-text-faint disabled:no-underline"
           >
             <Download className="w-4 h-4" /> Export CSV
           </button>

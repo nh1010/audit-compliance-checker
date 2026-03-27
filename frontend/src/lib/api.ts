@@ -23,7 +23,6 @@ export async function parseAudit(fileId: string): Promise<ParsedQuestion[]> {
 
 export async function analyzeCompliance(
   questions: ParsedQuestion[],
-  policyFileIds: string[],
   onResult: (result: AnalysisResult) => void,
   onDone: () => void,
   onError: (err: string) => void,
@@ -31,7 +30,7 @@ export async function analyzeCompliance(
   const res = await fetch(`${API_URL}/api/analyze`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ questions, policy_file_ids: policyFileIds }),
+    body: JSON.stringify({ questions }),
   });
 
   if (!res.ok) {

@@ -1,0 +1,44 @@
+---
+description: Architecture constraints and tech stack for the audit compliance checker
+alwaysApply: true
+---
+
+# Architecture & Tech Stack
+
+## Backend (Python / FastAPI)
+
+- **Runtime:** Python 3.12, FastAPI, uvicorn
+- **PDF parsing:** pdfplumber — extract text, split on numbered-question patterns
+- **Embeddings + retrieval:** ChromaDB (persistent, cosine similarity) with Google Gemini embeddings (`gemini-embedding-001`)
+- **LLM:** Gemini `gemini-2.5-flash` via `google-genai` — batches of 5 questions per call
+- **Streaming:** SSE via `StreamingResponse` — each result is `data: {json}\n\n`, terminated by `data: [DONE]\n\n`
+- **Policy ingestion:** `scripts/ingest_policies.py` chunks PDFs by page with 800-char / 200-overlap windows, upserts into ChromaDB
+
+### Backend rules
+
+- Keep routers thin — business logic belongs in `app/services/`
+- Pydantic v2 models in `app/models/schemas.py` are the single source of truth for request/response shapes
+- Never hardcode `GEMINI_API_KEY` — always read from environment
+- Temp uploaded files go under `{tmpdir}/audit_uploads/` — never persist user uploads to the repo or image
+- Vector store top-k is 8; adjust only with evidence of retrieval quality change
+
+## Frontend (React / TypeScript)
+
+- **Runtime:** React 19, TypeScript ~5.9, Vite 8
+- **Styling:** Tailwind CSS v4 (`@tailwindcss/vite` plugin), custom `@theme` palette in `index.css`
+- **Routing:** React Router v7 — `/` (Home) and `/results` (Results)
+- **State:** Questions held in `App`-level `useState`; results accumulated in `Results` page state from SSE stream
+- **Icons:** Lucide React
+
+### Frontend rules
+
+- No additional state management libraries without justification — React state + props is sufficient for current scope
+- API base URL from `VITE_API_URL` env var, fallback to `http://localhost:8000`
+- All API types mirror backend schemas in `src/lib/types.ts` — keep them identical
+- Components live in `src/components/`, pages in `src/pages/`, utilities in `src/lib/`
+
+## Docker
+
+- `docker-compose.yml` runs backend only; frontend is developed locally or deployed to Vercel
+- Dockerfile is multi-stage: builder installs deps + runs `ingest_policies.py` to bake the vector index into the image
+- `GEMINI_API_KEY` is needed as both a build-arg (for ingest) and a runtime env var (for analysis)

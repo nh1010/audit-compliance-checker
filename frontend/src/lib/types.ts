@@ -4,13 +4,6 @@ export interface ParsedQuestion {
   reference: string;
 }
 
-export interface PolicyMetadata {
-  file_id: string;
-  filename: string;
-  policy_id: string;
-  title: string;
-}
-
 export interface AnalysisResult {
   question_number: number;
   status: "met" | "not_met" | "partial";
@@ -23,8 +16,4 @@ export interface AnalysisResult {
 export interface UploadResponse {
   file_id: string;
   filename: string;
-  metadata: {
-    policy_id: string;
-    title: string;
-  };
 }

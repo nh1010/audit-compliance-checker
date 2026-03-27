@@ -1,5 +1,6 @@
 import logging
 import os
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -7,8 +8,22 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.routers import upload, audit, analyze
 
 logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-app = FastAPI(title="Audit Compliance Checker API")
+
+def _ensure_policies_ingested() -> None:
+    """Run policy ingestion for any new/missing PDFs."""
+    from scripts.ingest_policies import main as ingest_main
+    ingest_main()
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    _ensure_policies_ingested()
+    yield
+
+
+app = FastAPI(title="Audit Compliance Checker API", lifespan=lifespan)
 
 allowed_origins = os.environ.get("CORS_ORIGINS", "http://localhost:5173").split(",")
 

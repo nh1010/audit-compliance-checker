@@ -4,7 +4,6 @@ from pydantic import BaseModel
 class UploadResponse(BaseModel):
     file_id: str
     filename: str
-    metadata: dict
 
 
 class ParseRequest(BaseModel):
@@ -23,7 +22,6 @@ class ParseResponse(BaseModel):
 
 class AnalyzeRequest(BaseModel):
     questions: list[ParsedQuestion]
-    policy_file_ids: list[str]
 
 
 class AnalysisResult(BaseModel):

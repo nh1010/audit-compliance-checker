@@ -26,7 +26,7 @@ export default function SummaryCards({ results, total }: Props) {
           <c.icon className={`w-8 h-8 ${c.color}`} />
           <div>
             <div className={`text-2xl font-bold ${c.color}`}>{c.count}</div>
-            <div className="text-xs text-slate-500">{c.label}</div>
+            <div className="text-xs text-text-muted">{c.label}</div>
           </div>
         </div>
       ))}

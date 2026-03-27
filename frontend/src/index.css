@@ -1,23 +1,62 @@
 @import "tailwindcss";
 
 @theme {
-  --color-primary: #2563eb;
-  --color-primary-dark: #1d4ed8;
-  --color-met: #16a34a;
-  --color-met-bg: #f0fdf4;
-  --color-not-met: #dc2626;
-  --color-not-met-bg: #fef2f2;
-  --color-partial: #d97706;
-  --color-partial-bg: #fffbeb;
-  --color-pending: #6b7280;
-  --color-pending-bg: #f9fafb;
+  --color-bg: #F8FAFC;
+  --color-surface: #FFFFFF;
+  --color-surface-alt: #F1F5F9;
+  --color-border: #E2E8F0;
+  --color-border-strong: #CBD5E1;
+
+  --color-txt: #0F172A;
+  --color-txt-2: #475569;
+  --color-txt-3: #94A3B8;
+
+  --color-primary: #6366F1;
+  --color-primary-hover: #4F46E5;
+  --color-primary-light: #EEF2FF;
+  --color-cyan: #06B6D4;
+  --color-cyan-light: #ECFEFF;
+
+  --color-ok: #10B981;
+  --color-ok-light: #ECFDF5;
+  --color-ng: #EF4444;
+  --color-ng-light: #FEF2F2;
+  --color-warn: #F59E0B;
+  --color-warn-light: #FFFBEB;
+
+  --font-sans: "Inter", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", "IBM Plex Mono", monospace;
+
+  --animate-q-in: qIn 0.28s ease both;
+  --animate-ticker-in: tickerIn 0.3s ease;
+  --animate-fade-in: fadeIn 0.4s ease;
+  --animate-slide-up: slideUp 0.5s ease;
 }
 
 body {
   margin: 0;
-  font-family: "Inter", system-ui, -apple-system, sans-serif;
+  background: var(--color-bg);
+  color: var(--color-txt);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background: #f8fafc;
-  color: #1e293b;
+}
+
+@keyframes qIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: none; }
+}
+
+@keyframes tickerIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: none; }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: none; }
 }

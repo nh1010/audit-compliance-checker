@@ -1,0 +1,42 @@
+---
+description: React/TypeScript frontend conventions
+globs: frontend/src/**/*.{ts,tsx}
+alwaysApply: false
+---
+
+# Frontend React/TypeScript Conventions
+
+## File organization
+
+- `src/pages/` — route-level components (Home, Results)
+- `src/components/` — reusable UI components (FileUpload, ResultRow, StatusBadge, SummaryCards, ProgressBar)
+- `src/lib/api.ts` — all backend API calls
+- `src/lib/types.ts` — TypeScript interfaces mirroring backend Pydantic schemas
+
+## Type safety
+
+- Always use the interfaces from `src/lib/types.ts` — never use `any` for API data
+- Status values are union types: `"met" | "not_met" | "partial"`
+- Confidence values are union types: `"high" | "medium" | "low"`
+- When backend schemas change, update `types.ts` first, then fix type errors
+
+## Component patterns
+
+- Functional components only
+- Colocate component-specific logic; extract shared hooks to `src/lib/` or `src/hooks/`
+- Use Tailwind utility classes for styling — no CSS modules or styled-components
+- Use Lucide React for icons — don't add other icon libraries
+
+## SSE handling
+
+- `analyzeCompliance` in `api.ts` reads the SSE stream manually via `ReadableStream`
+- Each `data: {json}` line is parsed and passed to an `onResult` callback
+- Stream ends on `data: [DONE]` — the `onComplete` callback fires
+- Handle `data: {"error": "..."}` lines gracefully in the UI
+
+## Status color palette (defined in index.css @theme)
+
+- `--color-status-met`: green
+- `--color-status-not-met`: red
+- `--color-status-partial`: amber
+- `--color-status-pending`: gray
