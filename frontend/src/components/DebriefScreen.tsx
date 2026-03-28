@@ -26,14 +26,6 @@ export default function DebriefScreen({ questions, onRestart }: DebriefScreenPro
     year: "numeric",
   });
 
-  const actions = useMemo(
-    () =>
-      questions
-        .filter((q) => q.remediation)
-        .map((q) => ({ id: q.id, text: q.remediation! })),
-    [questions],
-  );
-
   const gaps = useMemo(
     () => questions.filter((q) => q.status === "not_met" || q.status === "partial"),
     [questions],
@@ -115,32 +107,6 @@ export default function DebriefScreen({ questions, onRestart }: DebriefScreenPro
           </div>
         ))}
       </div>
-
-      {/* Action card */}
-      {actions.length > 0 && (
-        <div className="bg-warn-light border border-warn/20 rounded-xl p-5 mb-8">
-          <div className="flex items-center gap-2 mb-3">
-            <div className="w-6 h-6 rounded-lg bg-warn/10 flex items-center justify-center">
-              <AlertTriangle className="w-3.5 h-3.5 text-warn" />
-            </div>
-            <span className="text-sm font-semibold text-warn">
-              Priority Remediation Actions
-            </span>
-          </div>
-          <div className="flex flex-col gap-2.5">
-            {actions.map((a) => (
-              <div key={a.id} className="flex items-start gap-2.5">
-                <span className="text-[12px] text-warn font-bold mt-px">
-                  {a.id}.
-                </span>
-                <span className="text-[13px] text-txt-2 leading-snug">
-                  {a.text}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
 
       {/* Gaps section */}
       {gaps.length > 0 && (
