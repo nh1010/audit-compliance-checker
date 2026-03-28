@@ -25,10 +25,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Audit Compliance Checker API", lifespan=lifespan)
 
-allowed_origins = [
-    o.strip().rstrip("/") for o in os.environ.get("CORS_ORIGINS", "http://localhost:5173").split(",")
-]
-logger.info("CORS allowed origins: %s", allowed_origins)
+allowed_origins = os.environ.get("CORS_ORIGINS", "http://localhost:5173").split(",")
 
 app.add_middleware(
     CORSMiddleware,
