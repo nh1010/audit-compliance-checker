@@ -31,38 +31,48 @@ def sync_from_r2() -> None:
     """Download any new PDFs from Cloudflare R2 that aren't already in POLICIES_DIR."""
     bucket_name = os.environ.get("R2_BUCKET")
     if not bucket_name:
+        logger.info("R2_BUCKET not set, skipping R2 sync")
         return
 
-    import boto3
+    logger.info("Starting R2 sync from bucket: %s", bucket_name)
 
-    s3 = boto3.client(
-        "s3",
-        endpoint_url=os.environ["R2_ENDPOINT_URL"],
-        aws_access_key_id=os.environ["R2_ACCESS_KEY_ID"],
-        aws_secret_access_key=os.environ["R2_SECRET_ACCESS_KEY"],
-        region_name="auto",
-    )
+    try:
+        import boto3
 
-    prefix = os.environ.get("R2_PREFIX", "")
-    POLICIES_DIR.mkdir(parents=True, exist_ok=True)
-    local_files = {f.name for f in POLICIES_DIR.glob("*.pdf")}
+        s3 = boto3.client(
+            "s3",
+            endpoint_url=os.environ["R2_ENDPOINT_URL"],
+            aws_access_key_id=os.environ["R2_ACCESS_KEY_ID"],
+            aws_secret_access_key=os.environ["R2_SECRET_ACCESS_KEY"],
+            region_name="auto",
+        )
 
-    paginator = s3.get_paginator("list_objects_v2")
-    downloaded = 0
-    for page in paginator.paginate(Bucket=bucket_name, Prefix=prefix):
-        for obj in page.get("Contents", []):
-            key = obj["Key"]
-            if not key.lower().endswith(".pdf"):
-                continue
-            filename = Path(key).name
-            if filename in local_files:
-                continue
-            dest = POLICIES_DIR / filename
-            s3.download_file(bucket_name, key, str(dest))
-            downloaded += 1
+        prefix = os.environ.get("R2_PREFIX", "")
+        POLICIES_DIR.mkdir(parents=True, exist_ok=True)
+        local_files = {f.name for f in POLICIES_DIR.glob("*.pdf")}
 
-    logger.info("R2 sync: %d new PDFs downloaded from %s/%s",
-                downloaded, bucket_name, prefix)
+        paginator = s3.get_paginator("list_objects_v2")
+        downloaded = 0
+        total_objects = 0
+        for page in paginator.paginate(Bucket=bucket_name, Prefix=prefix):
+            for obj in page.get("Contents", []):
+                total_objects += 1
+                key = obj["Key"]
+                if not key.lower().endswith(".pdf"):
+                    continue
+                filename = Path(key).name
+                if filename in local_files:
+                    continue
+                dest = POLICIES_DIR / filename
+                s3.download_file(bucket_name, key, str(dest))
+                downloaded += 1
+                if downloaded % 50 == 0:
+                    logger.info("R2 sync: downloaded %d PDFs so far...", downloaded)
+
+        logger.info("R2 sync complete: %d new PDFs downloaded, %d total objects in bucket (prefix=%r)",
+                    downloaded, total_objects, prefix)
+    except Exception:
+        logger.exception("R2 sync failed")
 
 
 def chunk_text(text: str, size: int = CHUNK_SIZE, overlap: int = CHUNK_OVERLAP) -> list[str]:
