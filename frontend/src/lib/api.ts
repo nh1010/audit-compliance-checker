@@ -24,10 +24,12 @@ export async function parseAudit(fileId: string): Promise<ParsedQuestion[]> {
 const MAX_RETRIES = 3;
 const RETRY_DELAY_MS = 2000;
 
+type StreamOutcome = { status: "done" } | { status: "dropped" } | { status: "error"; message: string };
+
 async function streamSSE(
   questions: ParsedQuestion[],
   onResult: (result: AnalysisResult) => void,
-): Promise<"done" | "dropped"> {
+): Promise<StreamOutcome> {
   const res = await fetch(`${API_URL}/api/analyze`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -57,9 +59,11 @@ async function streamSSE(
         const trimmed = line.trim();
         if (trimmed.startsWith("data: ")) {
           const payload = trimmed.slice(6);
-          if (payload === "[DONE]") return "done";
+          if (payload === "[DONE]") return { status: "done" };
           try {
-            onResult(JSON.parse(payload));
+            const parsed = JSON.parse(payload);
+            if (parsed.error) return { status: "error", message: parsed.error };
+            if (parsed.question_number != null) onResult(parsed);
           } catch {
             // skip malformed lines
           }
@@ -67,10 +71,10 @@ async function streamSSE(
       }
     }
   } catch {
-    return "dropped";
+    return { status: "dropped" };
   }
 
-  return "done";
+  return { status: "done" };
 }
 
 export async function analyzeCompliance(
@@ -91,8 +95,13 @@ export async function analyzeCompliance(
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     const outcome = await streamSSE(remaining, trackingOnResult);
 
-    if (outcome === "done") {
+    if (outcome.status === "done") {
       onDone();
+      return;
+    }
+
+    if (outcome.status === "error") {
+      onError(outcome.message);
       return;
     }
 

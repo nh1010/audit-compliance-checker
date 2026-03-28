@@ -10,30 +10,36 @@ A web application that automates healthcare regulatory compliance auditing. Uplo
 
 ## Tech Stack
 
-- **Frontend**: React 19 + TypeScript, Vite, Tailwind CSS v4, React Router, Lucide icons
+- **Frontend**: React 19 + TypeScript, Vite, Tailwind CSS v4, Lucide icons
 - **Backend**: Python 3.12, FastAPI, pdfplumber, Pydantic v2
-- **Vector DB**: ChromaDB (embedded, baked into Docker image)
+- **Vector DB**: ChromaDB (persistent, stored on a Docker volume)
 - **Embeddings**: Google `gemini-embedding-001`
 - **AI**: Google Gemini 2.5 Flash (via `google-genai` SDK)
-- **Hosting**: Vercel (frontend) + Render (backend, free tier)
+- **Hosting**: Vercel (frontend) + Railway (backend)
 
 ## Architecture
 
 ```
-frontend/          React SPA (Vite) — hosted on Vercel
+frontend/          React SPA (Vite)
 ├── src/
-│   ├── pages/     Home (upload + analyze), Results
-│   ├── components/  FileUpload, ProgressBar, ResultRow, SummaryCards, StatusBadge
-│   └── lib/       API client, shared types
+│   ├── components/  UploadScreen, ScanScreen, DebriefScreen
+│   ├── hooks/       useAudit (state machine driving the audit flow)
+│   └── lib/         API client, shared types
 
-backend/           FastAPI service (Docker) — hosted on Render
+backend/           FastAPI service (Docker)
 ├── app/
 │   ├── routers/   upload, audit (parse questions), analyze (SSE streaming)
 │   ├── services/  gemini (AI analysis), pdf_parser, vector_store (ChromaDB)
 │   └── models/    Pydantic schemas
-├── scripts/       ingest_policies.py (CLI indexer, runs at Docker build time)
+├── scripts/       ingest_policies.py (indexes PDFs on startup or via CLI)
 ├── policies/      Policy PDFs (gitignored, local only)
-└── data/chroma/   ChromaDB index (built at Docker build time, gitignored)
+└── data/chroma/   ChromaDB index (persisted via Docker volume, gitignored)
+```
+
+### Data Flow
+
+```
+Upload PDF → parse questions → vector search policies → Gemini analysis → SSE stream → Results UI
 ```
 
 ### API Endpoints
@@ -61,15 +67,12 @@ Place your P&P PDFs in `backend/policies/`. Subdirectories are supported.
 ### 3. Build and start the backend
 
 ```bash
-# Source the env so Docker can access GEMINI_API_KEY as a build secret
-source backend/.env && docker compose up --build
+docker compose up --build
 ```
 
-This builds a multi-stage Docker image that:
-1. Reads all PDFs from `backend/policies/`
-2. Chunks and embeds them using Google's embedding model
-3. Stores the ChromaDB index inside the image
-4. Starts the FastAPI server on `http://localhost:8000`
+On startup the backend automatically ingests any new policy PDFs from `backend/policies/` (or from R2 if configured) and indexes them into ChromaDB. The ChromaDB index is persisted on a named Docker volume (`chroma-data`) so re-indexing only happens when new PDFs are added.
+
+The FastAPI server starts on `http://localhost:8000`.
 
 ### 4. Start the frontend
 
@@ -94,39 +97,42 @@ uvicorn app.main:app --reload        # start the server
 
 ### Updating policies
 
-Add or replace PDFs in `backend/policies/`, then rebuild:
+Add or replace PDFs in `backend/policies/`, then restart:
 
 ```bash
-docker compose up --build
+docker compose restart
 ```
 
 ## Deployment
 
-### Backend (Render)
+### Backend (Railway)
 
-1. Push to GitHub (policy PDFs are gitignored)
-2. On [Render](https://render.com), create a new **Web Service** from the repo
-3. Set the **Docker context** to `backend/` and **Dockerfile path** to `backend/Dockerfile`
-4. Add environment variables:
-   - `GEMINI_API_KEY` — your Google AI API key (also set as a build-time variable)
+1. Push to GitHub (policy PDFs are gitignored; use R2 for production policies)
+2. On [Railway](https://railway.app), create a new project from the repo
+3. Add environment variables:
+   - `GEMINI_API_KEY` — your Google AI API key
    - `CORS_ORIGINS` — your Vercel frontend URL (e.g., `https://your-app.vercel.app`)
-5. Select the **Free** instance type
-6. Render builds the image (including ingestion) and deploys it
-
-The free tier spins down after 15 min of inactivity. First request after idle takes ~30s to cold start.
+   - R2 variables (optional) — `R2_BUCKET`, `R2_ENDPOINT_URL`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_PREFIX` for cloud policy storage
+4. Deploy — Railway uses `railway.toml` to locate the Dockerfile and health check
 
 ### Frontend (Vercel)
 
 1. Import the repo on [Vercel](https://vercel.com)
 2. Set the **Root Directory** to `frontend/`
 3. Add the environment variable:
-   - `VITE_API_URL` — your Render backend URL (e.g., `https://audit-compliance-backend.onrender.com`)
+   - `VITE_API_URL` — your Railway backend URL
 4. Deploy
 
 ## Environment Variables
 
 | Variable | Where | Description |
 |---|---|---|
-| `GEMINI_API_KEY` | Backend (runtime + build) | Google AI API key for embeddings and analysis |
-| `CORS_ORIGINS` | Backend (runtime) | Comma-separated allowed origins (default: `http://localhost:5173`) |
-| `VITE_API_URL` | Frontend (build) | Backend URL (e.g., `https://audit-compliance-backend.onrender.com`) |
+| `GEMINI_API_KEY` | Backend | Google AI API key for embeddings and analysis |
+| `CORS_ORIGINS` | Backend | Comma-separated allowed origins (default: `http://localhost:5173`) |
+| `VITE_API_URL` | Frontend (build) | Backend URL |
+| `CHROMA_DIR` | Backend (optional) | ChromaDB storage path (default: `data/chroma`) |
+| `R2_BUCKET` | Backend (optional) | Cloudflare R2 bucket for policy PDFs |
+| `R2_ENDPOINT_URL` | Backend (optional) | R2 endpoint URL |
+| `R2_ACCESS_KEY_ID` | Backend (optional) | R2 access key |
+| `R2_SECRET_ACCESS_KEY` | Backend (optional) | R2 secret key |
+| `R2_PREFIX` | Backend (optional) | R2 key prefix for policy files |

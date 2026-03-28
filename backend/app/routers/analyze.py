@@ -34,6 +34,7 @@ async def analyze(req: AnalyzeRequest):
                 logger.exception("Analysis error")
                 error_data = json.dumps({"error": str(e)})
                 await queue.put(f"data: {error_data}\n\n")
+                await queue.put("data: [DONE]\n\n")
             finally:
                 done.set()
                 await queue.put(None)

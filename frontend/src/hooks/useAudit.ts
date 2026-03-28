@@ -150,6 +150,7 @@ export function useAudit() {
   const [questions, setQuestions] = useState<AuditQuestion[]>([]);
   const [error, setError] = useState<string | null>(null);
   const abortRef = useRef(false);
+  const tickerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const runDemo = useCallback(async () => {
     abortRef.current = false;
@@ -231,7 +232,7 @@ export function useAudit() {
 
       // Show tickers as analysis starts
       let tickerIdx = 0;
-      const tickerInterval = setInterval(() => {
+      tickerRef.current = setInterval(() => {
         if (tickerIdx < parsed.length) {
           const pq = parsed[tickerIdx];
           setQuestions((prev) =>
@@ -270,18 +271,21 @@ export function useAudit() {
           );
         },
         () => {
-          clearInterval(tickerInterval);
+          if (tickerRef.current) clearInterval(tickerRef.current);
+          tickerRef.current = null;
         },
         (err: string) => {
-          clearInterval(tickerInterval);
+          if (tickerRef.current) clearInterval(tickerRef.current);
+          tickerRef.current = null;
           setError(err);
-          console.error("Analysis error:", err);
         },
       );
     } catch (err) {
+      if (tickerRef.current) clearInterval(tickerRef.current);
+      tickerRef.current = null;
       const msg = err instanceof Error ? err.message : String(err);
       setError(msg);
-      console.error("Upload/parse error:", err);
+      setScreen("upload");
     }
   }, []);
 
@@ -289,6 +293,8 @@ export function useAudit() {
 
   const restart = useCallback(() => {
     abortRef.current = true;
+    if (tickerRef.current) clearInterval(tickerRef.current);
+    tickerRef.current = null;
     setScreen("upload");
     setQuestions([]);
     setError(null);

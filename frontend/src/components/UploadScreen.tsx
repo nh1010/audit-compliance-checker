@@ -12,9 +12,10 @@ import ReadilyLogo from "./ReadilyLogo";
 interface UploadScreenProps {
   onFileSelect: (file: File, domains: string[]) => void;
   onDemo: () => void;
+  error?: string | null;
 }
 
-export default function UploadScreen({ onFileSelect, onDemo }: UploadScreenProps) {
+export default function UploadScreen({ onFileSelect, onDemo, error }: UploadScreenProps) {
   const [dragging, setDragging] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -124,6 +125,15 @@ export default function UploadScreen({ onFileSelect, onDemo }: UploadScreenProps
           <p className="text-sm text-txt-3 mb-8 leading-relaxed">
             Upload a P&P questionnaire PDF and get a full compliance report.
           </p>
+
+          {error && (
+            <div className="bg-ng-light border border-ng/20 rounded-xl px-4 py-3 mb-5 flex items-start gap-3">
+              <span className="w-[7px] h-[7px] rounded-full bg-ng mt-1.5 shrink-0" />
+              <p className="text-[13px] text-ng leading-relaxed">
+                {error}
+              </p>
+            </div>
+          )}
 
           {/* Drop zone */}
           <div

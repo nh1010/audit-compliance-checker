@@ -8,7 +8,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.routers import upload, audit, analyze
 
 logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
 
 
 def _ensure_policies_ingested() -> None:

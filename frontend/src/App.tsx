@@ -24,7 +24,7 @@ export default function App() {
       )}
 
       {screen === "upload" && (
-        <UploadScreen onFileSelect={runReal} onDemo={runDemo} />
+        <UploadScreen onFileSelect={runReal} onDemo={runDemo} error={error} />
       )}
       {screen === "scanning" && (
         <ScanScreen questions={questions} error={error} onComplete={goDebrief} />

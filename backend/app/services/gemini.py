@@ -100,6 +100,23 @@ def _parse_response(text: str, expected_numbers: list[int]) -> list[AnalysisResu
             for n in expected_numbers
         ]
 
+    if isinstance(data, dict):
+        data = [data]
+    if not isinstance(data, list):
+        logger.error("Gemini response is not a JSON array: %s", type(data))
+        return [
+            AnalysisResult(
+                question_number=n,
+                status="not_met",
+                evidence="Error: unexpected AI response format",
+                policy_source="",
+                page="",
+                confidence="low",
+                reason="AI response was not in expected format",
+            )
+            for n in expected_numbers
+        ]
+
     results = []
     seen = set()
     for item in data:
@@ -165,7 +182,24 @@ def _analyze_batch_sync(
             temperature=0.1,
         ),
     )
-    return _parse_response(response.text, expected)
+
+    text = response.text or ""
+    if not text.strip():
+        logger.error("Gemini returned empty response for questions %s", expected)
+        return [
+            AnalysisResult(
+                question_number=n,
+                status="not_met",
+                evidence="Error: AI returned an empty response",
+                policy_source="",
+                page="",
+                confidence="low",
+                reason="No response received from AI",
+            )
+            for n in expected
+        ]
+
+    return _parse_response(text, expected)
 
 
 async def analyze_all(
@@ -173,7 +207,7 @@ async def analyze_all(
     search_fn: Callable[[str], list[dict]],
 ) -> AsyncGenerator[AnalysisResult, None]:
     """Analyze all questions, yielding each result as it completes."""
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     for i in range(0, len(questions), BATCH_SIZE):
         batch = questions[i : i + BATCH_SIZE]
         results = await loop.run_in_executor(

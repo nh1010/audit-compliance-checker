@@ -1,4 +1,9 @@
+from typing import Literal
+
 from pydantic import BaseModel
+
+Status = Literal["met", "not_met", "partial"]
+Confidence = Literal["high", "medium", "low"]
 
 
 class UploadResponse(BaseModel):
@@ -26,9 +31,9 @@ class AnalyzeRequest(BaseModel):
 
 class AnalysisResult(BaseModel):
     question_number: int
-    status: str  # met, not_met, partial
+    status: Status
     evidence: str
     policy_source: str
     page: str
-    confidence: str  # high, medium, low
-    reason: str  # why the requirement is not_met or partial; empty for met
+    confidence: Confidence
+    reason: str
