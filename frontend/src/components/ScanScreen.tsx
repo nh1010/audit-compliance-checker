@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { ChevronDown, Download } from "lucide-react";
 import type { AuditQuestion } from "@/hooks/useAudit";
 import { confidenceToNumber } from "@/hooks/useAudit";
@@ -53,6 +53,21 @@ export default function ScanScreen({ questions, onComplete }: ScanScreenProps) {
   const currentQ = questions.find((q) => q.status === null);
   const currentIdx = currentQ ? currentQ.id : total;
 
+  const [lastResult, setLastResult] = useState<AuditQuestion | null>(null);
+  const prevResolved = useRef(resolved);
+
+  useEffect(() => {
+    if (resolved > prevResolved.current) {
+      const justFinished = questions.filter((q) => q.status !== null).slice(-1)[0];
+      if (justFinished) {
+        setLastResult(justFinished);
+        const timer = setTimeout(() => setLastResult(null), 2500);
+        return () => clearTimeout(timer);
+      }
+    }
+    prevResolved.current = resolved;
+  }, [resolved, questions]);
+
   const tickerText = useMemo(() => {
     for (let i = questions.length - 1; i >= 0; i--) {
       if (questions[i].ticker) return questions[i].ticker;
@@ -97,7 +112,7 @@ export default function ScanScreen({ questions, onComplete }: ScanScreenProps) {
   };
 
   return (
-    <div className="max-w-[920px] mx-auto px-6 py-8">
+    <div className="max-w-[1180px] mx-auto px-6 py-8">
       {/* Mission bar */}
       <div className="flex justify-between items-center border-b border-border pb-5 mb-7">
         <span className="font-mono text-[11px] text-txt-3 tracking-widest">
@@ -119,38 +134,79 @@ export default function ScanScreen({ questions, onComplete }: ScanScreenProps) {
       </div>
 
       {/* Progress card */}
-      <div className="bg-surface border border-border rounded-xl p-6 mb-5 flex items-center gap-8 shadow-sm">
-        <div className="relative w-[88px] h-[88px] shrink-0">
-          <svg viewBox="0 0 88 88" className="-rotate-90" width="88" height="88">
-            <circle cx="44" cy="44" r="40" fill="none" stroke="#E2E8F0" strokeWidth="3" />
-            <circle
-              cx="44" cy="44" r="40" fill="none"
-              stroke="#6366F1" strokeWidth="3" strokeLinecap="round"
-              strokeDasharray="251.2" strokeDashoffset={dashoffset}
-              className="transition-all duration-500"
-            />
-          </svg>
-          <span className="absolute inset-0 flex items-center justify-center font-mono text-base font-semibold text-txt">
-            {pct}%
-          </span>
+      <div className="grid grid-cols-[1fr_1fr] gap-4 mb-5">
+        <div className="bg-surface border border-border rounded-xl p-6 flex items-center gap-6 shadow-sm">
+          <div className="relative w-[88px] h-[88px] shrink-0">
+            <svg viewBox="0 0 88 88" className="-rotate-90" width="88" height="88">
+              <circle cx="44" cy="44" r="40" fill="none" stroke="#E2E8F0" strokeWidth="3" />
+              <circle
+                cx="44" cy="44" r="40" fill="none"
+                stroke="#6366F1" strokeWidth="3" strokeLinecap="round"
+                strokeDasharray="251.2" strokeDashoffset={dashoffset}
+                className="transition-all duration-500"
+              />
+            </svg>
+            <span className="absolute inset-0 flex items-center justify-center font-mono text-base font-semibold text-txt">
+              {pct}%
+            </span>
+          </div>
+
+          <div className="flex-1 min-w-0">
+            <p className="text-[15px] font-semibold text-txt truncate mb-0.5">{filename}</p>
+            <p className="font-mono text-[11px] text-txt-3 tracking-wider mb-3.5">
+              {total} requirements
+            </p>
+            <div className="h-[3px] bg-surface-alt rounded-full overflow-hidden mb-2">
+              <div
+                className="h-full rounded-full bg-primary transition-all duration-500"
+                style={{ width: `${pct}%` }}
+              />
+            </div>
+            <p className="font-mono text-[11px] text-txt-3">
+              {allDone
+                ? "Analysis complete"
+                : `Analyzing requirement ${currentIdx} of ${total}`}
+            </p>
+          </div>
         </div>
 
-        <div className="flex-1 min-w-0">
-          <p className="text-[15px] font-semibold text-txt truncate mb-0.5">{filename}</p>
-          <p className="font-mono text-[11px] text-txt-3 tracking-wider mb-3.5">
-            {total} requirements
+        <div className="bg-surface border border-border rounded-xl p-6 shadow-sm flex flex-col">
+          <p className="font-mono text-[10px] tracking-[0.08em] uppercase text-txt-3 font-semibold mb-3">
+            {allDone ? "Last Analyzed" : "Currently Analyzing"}
           </p>
-          <div className="h-[3px] bg-surface-alt rounded-full overflow-hidden mb-2">
-            <div
-              className="h-full rounded-full bg-primary transition-all duration-500"
-              style={{ width: `${pct}%` }}
-            />
-          </div>
-          <p className="font-mono text-[11px] text-txt-3">
-            {allDone
-              ? "Analysis complete"
-              : `Analyzing requirement ${currentIdx} of ${total}`}
-          </p>
+          {currentQ && !allDone ? (
+            <div className="flex-1 flex flex-col">
+              <span className="font-mono text-[11px] text-primary font-medium mb-1.5">
+                Question {currentQ.id} of {total}
+              </span>
+              <p className="text-[13px] leading-relaxed text-txt flex-1">
+                {currentQ.text}
+              </p>
+              {lastResult && (
+                <div
+                  key={lastResult.id}
+                  className="mt-3 pt-3 border-t border-border flex items-center gap-2 animate-ticker-in"
+                >
+                  <StatusBadge status={lastResult.status} />
+                  <span className="text-[11px] text-txt-3 truncate">
+                    Q{lastResult.id}: {lastResult.text.slice(0, 60)}
+                    {lastResult.text.length > 60 ? "..." : ""}
+                  </span>
+                </div>
+              )}
+            </div>
+          ) : allDone ? (
+            <div className="flex-1 flex items-center justify-center">
+              <div className="text-center">
+                <span className="w-[7px] h-[7px] rounded-full bg-ok inline-block mb-2" />
+                <p className="text-[13px] text-txt-2">All requirements analyzed</p>
+              </div>
+            </div>
+          ) : (
+            <div className="flex-1 flex items-center justify-center">
+              <p className="text-[12px] text-txt-3">Waiting for questions...</p>
+            </div>
+          )}
         </div>
       </div>
 

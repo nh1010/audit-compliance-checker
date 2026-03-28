@@ -11,7 +11,7 @@ export default function App() {
     <div className="min-h-screen bg-bg">
       {screen !== "upload" && (
         <nav className="sticky top-0 z-20 border-b border-border bg-surface/80 backdrop-blur-lg">
-          <div className="max-w-5xl mx-auto px-6 py-3.5 flex items-center justify-between">
+          <div className="max-w-[1180px] mx-auto px-6 py-3.5 flex items-center justify-between">
             <ReadilyLogo />
             <button
               onClick={restart}
