@@ -41,11 +41,11 @@ export default function DebriefScreen({ questions, onRestart }: DebriefScreenPro
 
   const exportCsv = () => {
     const header =
-      "Question #,Question,Status,Evidence,Source,Page,Confidence,Remediation\n";
+      "Question #,Question,Status,Evidence,Reason,Source,Page,Confidence,Remediation\n";
     const rows = questions
       .map(
         (q) =>
-          `${q.id},"${(q.text || "").replace(/"/g, '""')}",${q.status || "pending"},"${(q.evidence || "").replace(/"/g, '""')}","${(q.source || "").replace(/"/g, '""')}","${(q.page || "").replace(/"/g, '""')}",${q.confidence ?? ""},"${(q.remediation || "").replace(/"/g, '""')}"`,
+          `${q.id},"${(q.text || "").replace(/"/g, '""')}",${q.status || "pending"},"${(q.evidence || "").replace(/"/g, '""')}","${(q.reason || "").replace(/"/g, '""')}","${(q.source || "").replace(/"/g, '""')}","${(q.page || "").replace(/"/g, '""')}",${q.confidence ?? ""},"${(q.remediation || "").replace(/"/g, '""')}"`,
       )
       .join("\n");
     const blob = new Blob([header + rows], { type: "text/csv" });
@@ -164,8 +164,13 @@ export default function DebriefScreen({ questions, onRestart }: DebriefScreenPro
                   <p className="text-[13px] leading-relaxed text-txt">
                     {q.text.length > 120 ? q.text.slice(0, 120) + "..." : q.text}
                   </p>
+                  {q.reason && (
+                    <p className="text-[12px] text-ng mt-1.5 leading-snug font-medium">
+                      {q.reason}
+                    </p>
+                  )}
                   {q.evidence && (
-                    <p className="text-[12px] text-txt-3 mt-1.5 leading-snug">
+                    <p className="text-[12px] text-txt-3 mt-1 leading-snug">
                       {q.evidence}
                     </p>
                   )}

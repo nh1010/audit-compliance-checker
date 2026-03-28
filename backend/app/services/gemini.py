@@ -26,12 +26,14 @@ Respond with a JSON array. Each element must have exactly these fields:
 - "policy_source": the policy document ID where the evidence was found (e.g. "GG.1508") (empty string if not_met)
 - "page": the page reference from the excerpt metadata (e.g. "Page 10"), otherwise empty string
 - "confidence": one of "high", "medium", or "low"
+- "reason": a brief explanation of why the requirement is not met or only partially met (1-2 sentences). For "met" status, use an empty string.
 
 Rules:
 - "met" means the policy clearly and fully addresses every element of the requirement.
 - "partial" means the policy addresses some but not all elements, or the language is ambiguous.
 - "not_met" means no relevant language was found in any provided excerpt.
 - For the evidence field, quote the actual policy text verbatim. Keep it concise (1-3 sentences).
+- For the reason field on "not_met": explain what specific policy language or section is missing. For "partial": explain which elements are addressed and which are missing or unclear.
 - Be precise and conservative. If unsure, use "partial" with "medium" or "low" confidence.
 - Return ONLY the JSON array, no other text."""
 
@@ -93,6 +95,7 @@ def _parse_response(text: str, expected_numbers: list[int]) -> list[AnalysisResu
                 policy_source="",
                 page="",
                 confidence="low",
+                reason="AI response could not be parsed",
             )
             for n in expected_numbers
         ]
@@ -108,6 +111,7 @@ def _parse_response(text: str, expected_numbers: list[int]) -> list[AnalysisResu
                 policy_source=item.get("policy_source", ""),
                 page=item.get("page", ""),
                 confidence=item.get("confidence", "low"),
+                reason=item.get("reason", ""),
             )
             if r.status not in ("met", "not_met", "partial"):
                 r.status = "not_met"
@@ -127,6 +131,7 @@ def _parse_response(text: str, expected_numbers: list[int]) -> list[AnalysisResu
                 policy_source="",
                 page="",
                 confidence="low",
+                reason="No response received from AI for this question",
             ))
 
     return sorted(results, key=lambda r: r.question_number)

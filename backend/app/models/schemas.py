@@ -31,3 +31,4 @@ class AnalysisResult(BaseModel):
     policy_source: str
     page: str
     confidence: str  # high, medium, low
+    reason: str  # why the requirement is not_met or partial; empty for met

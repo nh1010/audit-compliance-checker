@@ -13,6 +13,7 @@ export interface AuditQuestion {
   confidence: "high" | "medium" | "low" | null;
   ticker: string | null;
   remediation: string | null;
+  reason: string | null;
   domain: string;
   filename: string;
 }
@@ -40,6 +41,8 @@ const DEMO_QUESTIONS = [
     ticker: "Cross-referencing §4.2 with statutory hospice requirements...",
     remediation:
       "Strengthen MCP obligation language in §4.2 to explicitly cite state law and Contract requirements.",
+    reason:
+      "§4.2 covers member election but does not reference specific state law or Contract requirements mandating hospice service provision.",
   },
   {
     text: "Does the P&P state that Members who qualify for and elect to receive hospice care services remain enrolled in an MCP while receiving such services?",
@@ -52,6 +55,7 @@ const DEMO_QUESTIONS = [
     ticker:
       "Match found in §3.1 — enrollment continuity clause confirmed...",
     remediation: null,
+    reason: null,
   },
   {
     text: "Does the P&P state that MCPs should clarify how Members may access hospice care services in a timely manner, preferably within 24 hours of the request?",
@@ -65,6 +69,8 @@ const DEMO_QUESTIONS = [
       "Scanning all referral provisions — no 24-hour hospice clause found...",
     remediation:
       "Add 24-hour access language for hospice referrals in §5.3.",
+    reason:
+      "No policy section addresses timely access to hospice services or a 24-hour response requirement. §5.3 covers specialist referrals but not hospice-specific timelines.",
   },
   {
     text: "Does the P&P state MCPs may restrict coverage to in-Network Providers, unless Medically Necessary services are not available in-Network?",
@@ -78,6 +84,8 @@ const DEMO_QUESTIONS = [
       "Medi-Cal exception language present but incomplete in §6.1...",
     remediation:
       "Update §6.1 to explicitly reference Medi-Cal contractual requirements.",
+    reason:
+      "§6.1 addresses in-network restrictions but the medical necessity exception lacks an explicit reference to Medi-Cal contractual requirements.",
   },
   {
     text: "Does the P&P state Members who elect hospice care are entitled to curative treatment for conditions unrelated to their terminal illness?",
@@ -89,6 +97,7 @@ const DEMO_QUESTIONS = [
     confidence: "high" as const,
     ticker: "Concurrent care entitlement confirmed in §8.4...",
     remediation: null,
+    reason: null,
   },
   {
     text: "Does the P&P state that for out-of-Network hospice Providers, the MCP should seek a single case agreement or letter of agreement?",
@@ -102,6 +111,8 @@ const DEMO_QUESTIONS = [
       "OON hospice provisions absent — §9.2 covers specialists only...",
     remediation:
       "Insert out-of-network hospice provider agreement provisions — entirely absent from current P&P.",
+    reason:
+      "No policy section addresses out-of-network hospice provider agreements. §9.2 only covers specialist OON agreements.",
   },
   {
     text: "Does the P&P state that while Prior Authorization for hospice services is restricted, MCPs are required to review documentation to avoid Fraud, Waste, and Abuse?",
@@ -115,6 +126,8 @@ const DEMO_QUESTIONS = [
       "FWA language found in Addendum B — not integrated in §11.1...",
     remediation:
       "Integrate FWA documentation requirements directly into §11.1.",
+    reason:
+      "FWA review requirements exist in Addendum B but are not integrated into the hospice-specific §11.1 section, making the connection indirect.",
   },
 ];
 
@@ -135,6 +148,7 @@ function remediationFromResult(
 export function useAudit() {
   const [screen, setScreen] = useState<Screen>("upload");
   const [questions, setQuestions] = useState<AuditQuestion[]>([]);
+  const [error, setError] = useState<string | null>(null);
   const abortRef = useRef(false);
 
   const runDemo = useCallback(async () => {
@@ -150,6 +164,7 @@ export function useAudit() {
       confidence: null,
       ticker: null,
       remediation: null,
+      reason: null,
       domain: "Hospice Services",
       filename: "demo-audit.pdf",
     }));
@@ -179,6 +194,7 @@ export function useAudit() {
                 page: d.page,
                 confidence: d.confidence,
                 remediation: d.remediation,
+                reason: d.reason ?? null,
               }
             : q,
         ),
@@ -188,6 +204,7 @@ export function useAudit() {
 
   const runReal = useCallback(async (file: File, domains: string[]) => {
     abortRef.current = false;
+    setError(null);
     setScreen("scanning");
 
     try {
@@ -206,6 +223,7 @@ export function useAudit() {
         confidence: null,
         ticker: null,
         remediation: null,
+        reason: null,
         domain: domains[0] || "",
         filename,
       }));
@@ -245,6 +263,7 @@ export function useAudit() {
                       q.ticker ||
                       `Analyzed: ${q.text.slice(0, 60)}...`,
                     remediation: remediationFromResult(result, q.text),
+                    reason: result.reason || null,
                   }
                 : q,
             ),
@@ -255,10 +274,13 @@ export function useAudit() {
         },
         (err: string) => {
           clearInterval(tickerInterval);
+          setError(err);
           console.error("Analysis error:", err);
         },
       );
     } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setError(msg);
       console.error("Upload/parse error:", err);
     }
   }, []);
@@ -269,7 +291,8 @@ export function useAudit() {
     abortRef.current = true;
     setScreen("upload");
     setQuestions([]);
+    setError(null);
   }, []);
 
-  return { screen, questions, runDemo, runReal, goDebrief, restart };
+  return { screen, questions, error, runDemo, runReal, goDebrief, restart };
 }

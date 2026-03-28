@@ -21,12 +21,13 @@ export async function parseAudit(fileId: string): Promise<ParsedQuestion[]> {
   return data.questions;
 }
 
-export async function analyzeCompliance(
+const MAX_RETRIES = 3;
+const RETRY_DELAY_MS = 2000;
+
+async function streamSSE(
   questions: ParsedQuestion[],
   onResult: (result: AnalysisResult) => void,
-  onDone: () => void,
-  onError: (err: string) => void,
-) {
+): Promise<"done" | "dropped"> {
   const res = await fetch(`${API_URL}/api/analyze`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -34,39 +35,80 @@ export async function analyzeCompliance(
   });
 
   if (!res.ok) {
-    onError(await res.text());
-    return;
+    throw new Error(await res.text());
   }
 
   const reader = res.body?.getReader();
-  if (!reader) { onError("No response body"); return; }
+  if (!reader) throw new Error("No response body");
 
   const decoder = new TextDecoder();
   let buffer = "";
 
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
 
-    const lines = buffer.split("\n");
-    buffer = lines.pop() || "";
+      const lines = buffer.split("\n");
+      buffer = lines.pop() || "";
 
-    for (const line of lines) {
-      const trimmed = line.trim();
-      if (trimmed.startsWith("data: ")) {
-        const payload = trimmed.slice(6);
-        if (payload === "[DONE]") {
-          onDone();
-          return;
-        }
-        try {
-          onResult(JSON.parse(payload));
-        } catch {
-          // skip malformed lines
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (trimmed.startsWith("data: ")) {
+          const payload = trimmed.slice(6);
+          if (payload === "[DONE]") return "done";
+          try {
+            onResult(JSON.parse(payload));
+          } catch {
+            // skip malformed lines
+          }
         }
       }
     }
+  } catch {
+    return "dropped";
   }
-  onDone();
+
+  return "done";
+}
+
+export async function analyzeCompliance(
+  questions: ParsedQuestion[],
+  onResult: (result: AnalysisResult) => void,
+  onDone: () => void,
+  onError: (err: string) => void,
+) {
+  const answered = new Set<number>();
+
+  const trackingOnResult = (result: AnalysisResult) => {
+    answered.add(result.question_number);
+    onResult(result);
+  };
+
+  let remaining = questions;
+
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    const outcome = await streamSSE(remaining, trackingOnResult);
+
+    if (outcome === "done") {
+      onDone();
+      return;
+    }
+
+    remaining = questions.filter((q) => !answered.has(q.number));
+    if (remaining.length === 0) {
+      onDone();
+      return;
+    }
+
+    if (attempt < MAX_RETRIES) {
+      const delay = RETRY_DELAY_MS * (attempt + 1);
+      await new Promise((r) => setTimeout(r, delay));
+    }
+  }
+
+  onError(
+    `Connection lost after ${MAX_RETRIES} retries. ${answered.size}/${questions.length} questions analyzed.`,
+  );
 }

@@ -11,6 +11,7 @@ export interface AnalysisResult {
   policy_source: string;
   page: string;
   confidence: "high" | "medium" | "low";
+  reason: string;
 }
 
 export interface UploadResponse {

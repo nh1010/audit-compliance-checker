@@ -5,6 +5,7 @@ import { confidenceToNumber } from "@/hooks/useAudit";
 
 interface ScanScreenProps {
   questions: AuditQuestion[];
+  error: string | null;
   onComplete: () => void;
 }
 
@@ -36,7 +37,7 @@ function StatusBadge({ status }: { status: AuditQuestion["status"] }) {
   );
 }
 
-export default function ScanScreen({ questions, onComplete }: ScanScreenProps) {
+export default function ScanScreen({ questions, error, onComplete }: ScanScreenProps) {
   const [filter, setFilter] = useState<Filter>("all");
   const [expanded, setExpanded] = useState<number | null>(null);
 
@@ -88,11 +89,11 @@ export default function ScanScreen({ questions, onComplete }: ScanScreenProps) {
   const dashoffset = 251.2 - (251.2 * pct) / 100;
 
   const exportCsv = () => {
-    const header = "Question #,Question,Status,Evidence,Source,Confidence\n";
+    const header = "Question #,Question,Status,Evidence,Reason,Source,Confidence\n";
     const rows = questions
       .map(
         (q) =>
-          `${q.id},"${(q.text || "").replace(/"/g, '""')}",${q.status || "pending"},"${(q.evidence || "").replace(/"/g, '""')}","${(q.source || "").replace(/"/g, '""')}",${q.confidence ?? ""}`,
+          `${q.id},"${(q.text || "").replace(/"/g, '""')}",${q.status || "pending"},"${(q.evidence || "").replace(/"/g, '""')}","${(q.reason || "").replace(/"/g, '""')}","${(q.source || "").replace(/"/g, '""')}",${q.confidence ?? ""}`,
       )
       .join("\n");
     const blob = new Blob([header + rows], { type: "text/csv" });
@@ -123,6 +124,11 @@ export default function ScanScreen({ questions, onComplete }: ScanScreenProps) {
             <>
               <span className="w-[7px] h-[7px] rounded-full bg-ok" />
               <span className="text-ok font-medium">SCAN COMPLETE</span>
+            </>
+          ) : error ? (
+            <>
+              <span className="w-[7px] h-[7px] rounded-full bg-ng" />
+              <span className="text-ng font-medium">CONNECTION LOST</span>
             </>
           ) : (
             <>
@@ -226,6 +232,16 @@ export default function ScanScreen({ questions, onComplete }: ScanScreenProps) {
       )}
       {(!tickerText || allDone) && <div className="mb-6" />}
 
+      {error && (
+        <div className="bg-ng-light border border-ng/20 rounded-xl px-4 py-3 mb-6 flex items-start gap-3">
+          <span className="w-[7px] h-[7px] rounded-full bg-ng mt-1.5 shrink-0" />
+          <div className="flex-1 min-w-0">
+            <p className="text-[13px] font-medium text-ng mb-0.5">Connection lost</p>
+            <p className="text-[12px] text-txt-2 leading-relaxed">{error}</p>
+          </div>
+        </div>
+      )}
+
       {/* Stat row */}
       <div className="grid grid-cols-4 gap-3 mb-6">
         {(
@@ -309,14 +325,28 @@ export default function ScanScreen({ questions, onComplete }: ScanScreenProps) {
                 />
               </div>
 
-              {isExpanded && q.evidence && (
+              {isExpanded && (q.evidence || q.reason) && (
                 <div className="border-t border-border pt-3.5 pr-4 pb-3.5 pl-[50px]">
-                  <p className="text-[10px] tracking-[0.08em] uppercase text-txt-3 font-semibold mb-2">
-                    Evidence
-                  </p>
-                  <p className="text-[13px] leading-[1.65] text-txt-2 border-l-2 border-primary/30 pl-3 mb-3">
-                    {q.evidence}
-                  </p>
+                  {q.evidence && (
+                    <>
+                      <p className="text-[10px] tracking-[0.08em] uppercase text-txt-3 font-semibold mb-2">
+                        Evidence
+                      </p>
+                      <p className="text-[13px] leading-[1.65] text-txt-2 border-l-2 border-primary/30 pl-3 mb-3">
+                        {q.evidence}
+                      </p>
+                    </>
+                  )}
+                  {q.reason && (q.status === "not_met" || q.status === "partial") && (
+                    <>
+                      <p className="text-[10px] tracking-[0.08em] uppercase text-txt-3 font-semibold mb-2">
+                        {q.status === "not_met" ? "Why Not Met" : "Why Partial"}
+                      </p>
+                      <p className="text-[13px] leading-[1.65] text-txt-2 border-l-2 border-ng/30 pl-3 mb-3">
+                        {q.reason}
+                      </p>
+                    </>
+                  )}
                   <div className="flex items-center gap-3 flex-wrap">
                     {q.source && (
                       <span className="font-mono text-[10px] bg-surface-alt border border-border rounded-md px-2 py-0.5 text-txt-2">
@@ -352,13 +382,13 @@ export default function ScanScreen({ questions, onComplete }: ScanScreenProps) {
         })}
       </div>
 
-      {allDone && (
+      {(allDone || (error && resolved > 0)) && (
         <div className="flex justify-center mt-8">
           <button
             onClick={onComplete}
             className="bg-primary hover:bg-primary-hover text-white font-semibold rounded-xl px-7 py-3 cursor-pointer transition-colors shadow-sm flex items-center gap-2"
           >
-            View debrief
+            {allDone ? "View debrief" : "View partial debrief"}
             <ArrowRight className="w-4 h-4" />
           </button>
         </div>

@@ -5,7 +5,7 @@ import DebriefScreen from "@/components/DebriefScreen";
 import ReadilyLogo from "@/components/ReadilyLogo";
 
 export default function App() {
-  const { screen, questions, runDemo, runReal, goDebrief, restart } = useAudit();
+  const { screen, questions, error, runDemo, runReal, goDebrief, restart } = useAudit();
 
   return (
     <div className="min-h-screen bg-bg">
@@ -27,7 +27,7 @@ export default function App() {
         <UploadScreen onFileSelect={runReal} onDemo={runDemo} />
       )}
       {screen === "scanning" && (
-        <ScanScreen questions={questions} onComplete={goDebrief} />
+        <ScanScreen questions={questions} error={error} onComplete={goDebrief} />
       )}
       {screen === "debrief" && (
         <DebriefScreen questions={questions} onRestart={restart} />
