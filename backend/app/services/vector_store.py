@@ -53,17 +53,27 @@ class GoogleEmbeddingFunction(EmbeddingFunction[Documents]):
                 time.sleep(wait)
 
 
+_client: chromadb.ClientAPI | None = None
+_collection: chromadb.Collection | None = None
+
+
 def _get_client() -> chromadb.ClientAPI:
-    return chromadb.PersistentClient(path=CHROMA_DIR)
+    global _client
+    if _client is None:
+        _client = chromadb.PersistentClient(path=CHROMA_DIR)
+    return _client
 
 
 def get_collection() -> chromadb.Collection:
-    client = _get_client()
-    return client.get_or_create_collection(
-        name=COLLECTION_NAME,
-        embedding_function=GoogleEmbeddingFunction(),
-        metadata={"hnsw:space": "cosine"},
-    )
+    global _collection
+    if _collection is None:
+        client = _get_client()
+        _collection = client.get_or_create_collection(
+            name=COLLECTION_NAME,
+            embedding_function=GoogleEmbeddingFunction(),
+            metadata={"hnsw:space": "cosine"},
+        )
+    return _collection
 
 
 def search(query: str, n_results: int = TOP_K) -> list[dict]:

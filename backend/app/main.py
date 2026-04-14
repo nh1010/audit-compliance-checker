@@ -1,3 +1,4 @@
+import gc
 import logging
 import os
 from contextlib import asynccontextmanager
@@ -19,6 +20,7 @@ def _ensure_policies_ingested() -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     _ensure_policies_ingested()
+    gc.collect()
     yield
 
 

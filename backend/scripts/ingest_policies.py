@@ -133,10 +133,24 @@ def ingest_file(pdf_path: Path, collection) -> int:
 
 def _ingested_source_files(collection) -> set[str]:
     """Return the set of source_file values already present in the collection."""
-    if collection.count() == 0:
+    total = collection.count()
+    if total == 0:
         return set()
-    all_meta = collection.get(include=["metadatas"])["metadatas"]
-    return {m["source_file"] for m in all_meta if m.get("source_file")}
+    source_files: set[str] = set()
+    batch_size = 1000
+    offset = 0
+    while offset < total:
+        batch = collection.get(
+            include=["metadatas"],
+            limit=batch_size,
+            offset=offset,
+        )
+        for m in batch["metadatas"]:
+            sf = m.get("source_file")
+            if sf:
+                source_files.add(sf)
+        offset += batch_size
+    return source_files
 
 
 def main(pdf_paths: list[Path] | None = None, force: bool = False):
