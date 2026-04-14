@@ -19,6 +19,8 @@ class ParsedQuestion(BaseModel):
     number: int
     text: str
     reference: str
+    section: str = ""
+    source_doc: str = ""
 
 
 class ParseResponse(BaseModel):

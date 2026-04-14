@@ -1,11 +1,28 @@
 import { useAudit } from "@/hooks/useAudit";
 import UploadScreen from "@/components/UploadScreen";
+import ParsingScreen from "@/components/ParsingScreen";
+import ReviewScreen from "@/components/ReviewScreen";
 import ScanScreen from "@/components/ScanScreen";
 import DebriefScreen from "@/components/DebriefScreen";
 import ReadilyLogo from "@/components/ReadilyLogo";
 
 export default function App() {
-  const { screen, questions, error, runDemo, runReal, goDebrief, restart } = useAudit();
+  const {
+    screen,
+    questions,
+    parsedQuestions,
+    sectionNames,
+    extractingSection,
+    extractionDone,
+    parseStep,
+    filename,
+    error,
+    runDemo,
+    runReal,
+    startAnalysis,
+    goDebrief,
+    restart,
+  } = useAudit();
 
   return (
     <div className="min-h-screen bg-bg">
@@ -25,6 +42,20 @@ export default function App() {
 
       {screen === "upload" && (
         <UploadScreen onFileSelect={runReal} onDemo={runDemo} error={error} />
+      )}
+      {screen === "parsing" && (
+        <ParsingScreen filename={filename} step={parseStep} />
+      )}
+      {screen === "review" && (
+        <ReviewScreen
+          questions={parsedQuestions}
+          sectionNames={sectionNames}
+          extractingSection={extractingSection}
+          extractionDone={extractionDone}
+          filename={filename}
+          onStartAnalysis={startAnalysis}
+          onBack={restart}
+        />
       )}
       {screen === "scanning" && (
         <ScanScreen questions={questions} error={error} onComplete={goDebrief} />

@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback } from "react";
-import { uploadFile, parseAudit, analyzeCompliance } from "@/lib/api";
-import type { ParsedQuestion, AnalysisResult } from "@/lib/types";
+import { uploadFile, parseAuditStream, analyzeCompliance } from "@/lib/api";
+import type { ParsedQuestion, ParseEvent, AnalysisResult } from "@/lib/types";
 
 export interface AuditQuestion {
   id: number;
@@ -18,7 +18,8 @@ export interface AuditQuestion {
   filename: string;
 }
 
-export type Screen = "upload" | "scanning" | "debrief";
+export type Screen = "upload" | "parsing" | "scanning" | "review" | "debrief";
+export type ParseStep = "uploading" | "extracting";
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -148,9 +149,15 @@ function remediationFromResult(
 export function useAudit() {
   const [screen, setScreen] = useState<Screen>("upload");
   const [questions, setQuestions] = useState<AuditQuestion[]>([]);
+  const [parsedQuestions, setParsedQuestions] = useState<ParsedQuestion[]>([]);
+  const [sectionNames, setSectionNames] = useState<string[]>([]);
+  const [extractingSection, setExtractingSection] = useState<string | null>(null);
+  const [extractionDone, setExtractionDone] = useState(false);
+  const [parseStep, setParseStep] = useState<ParseStep>("uploading");
   const [error, setError] = useState<string | null>(null);
   const abortRef = useRef(false);
   const tickerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const filenameRef = useRef("");
 
   const runDemo = useCallback(async () => {
     abortRef.current = false;
@@ -203,51 +210,95 @@ export function useAudit() {
     }
   }, []);
 
-  const runReal = useCallback(async (file: File, domains: string[]) => {
+  const runReal = useCallback(async (file: File, _domains: string[]) => {
     abortRef.current = false;
     setError(null);
-    setScreen("scanning");
+    setParseStep("uploading");
+    setSectionNames([]);
+    setExtractingSection(null);
+    setExtractionDone(false);
+    setParsedQuestions([]);
+    filenameRef.current = file.name;
+    setScreen("parsing");
 
     try {
       const { file_id, filename } = await uploadFile(file);
+      filenameRef.current = filename;
 
-      const parsed: ParsedQuestion[] = await parseAudit(file_id);
+      setParseStep("extracting");
 
-      const initial: AuditQuestion[] = parsed.map((pq) => ({
-        id: pq.number,
-        text: pq.text,
-        reference: pq.reference,
-        status: null,
-        evidence: null,
-        source: null,
-        page: null,
-        confidence: null,
-        ticker: null,
-        remediation: null,
-        reason: null,
-        domain: domains[0] || "",
-        filename,
-      }));
-      setQuestions(initial);
+      await parseAuditStream(file_id, (event: ParseEvent) => {
+        if (abortRef.current) return;
 
-      // Show tickers as analysis starts
-      let tickerIdx = 0;
-      tickerRef.current = setInterval(() => {
-        if (tickerIdx < parsed.length) {
-          const pq = parsed[tickerIdx];
-          setQuestions((prev) =>
-            prev.map((q) =>
-              q.id === pq.number
-                ? { ...q, ticker: tickerForQuestion(pq) }
-                : q,
-            ),
-          );
-          tickerIdx++;
+        switch (event.type) {
+          case "toc":
+            setSectionNames(event.sections);
+            setScreen("review");
+            break;
+          case "extracting":
+            setExtractingSection(event.section);
+            break;
+          case "section":
+            setParsedQuestions((prev) => [...prev, ...event.questions]);
+            setExtractingSection(null);
+            break;
         }
-      }, 800);
+      });
 
+      if (!abortRef.current) {
+        setExtractionDone(true);
+        setExtractingSection(null);
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setError(msg);
+      setScreen("upload");
+    }
+  }, []);
+
+  const startAnalysis = useCallback(async (ignoredIds: Set<number>) => {
+    abortRef.current = false;
+    setError(null);
+
+    const active = parsedQuestions.filter((pq) => !ignoredIds.has(pq.number));
+    if (active.length === 0) return;
+
+    const initial: AuditQuestion[] = active.map((pq) => ({
+      id: pq.number,
+      text: pq.text,
+      reference: pq.reference,
+      status: null,
+      evidence: null,
+      source: null,
+      page: null,
+      confidence: null,
+      ticker: null,
+      remediation: null,
+      reason: null,
+      domain: "",
+      filename: filenameRef.current,
+    }));
+    setQuestions(initial);
+    setScreen("scanning");
+
+    let tickerIdx = 0;
+    tickerRef.current = setInterval(() => {
+      if (tickerIdx < active.length) {
+        const pq = active[tickerIdx];
+        setQuestions((prev) =>
+          prev.map((q) =>
+            q.id === pq.number
+              ? { ...q, ticker: tickerForQuestion(pq) }
+              : q,
+          ),
+        );
+        tickerIdx++;
+      }
+    }, 800);
+
+    try {
       await analyzeCompliance(
-        parsed,
+        active,
         (result: AnalysisResult) => {
           if (abortRef.current) return;
           setQuestions((prev) =>
@@ -285,9 +336,8 @@ export function useAudit() {
       tickerRef.current = null;
       const msg = err instanceof Error ? err.message : String(err);
       setError(msg);
-      setScreen("upload");
     }
-  }, []);
+  }, [parsedQuestions]);
 
   const goDebrief = useCallback(() => setScreen("debrief"), []);
 
@@ -297,8 +347,28 @@ export function useAudit() {
     tickerRef.current = null;
     setScreen("upload");
     setQuestions([]);
+    setParsedQuestions([]);
+    setSectionNames([]);
+    setExtractingSection(null);
+    setExtractionDone(false);
     setError(null);
+    filenameRef.current = "";
   }, []);
 
-  return { screen, questions, error, runDemo, runReal, goDebrief, restart };
+  return {
+    screen,
+    questions,
+    parsedQuestions,
+    sectionNames,
+    extractingSection,
+    extractionDone,
+    parseStep,
+    filename: filenameRef.current,
+    error,
+    runDemo,
+    runReal,
+    startAnalysis,
+    goDebrief,
+    restart,
+  };
 }

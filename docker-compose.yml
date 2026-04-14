@@ -8,6 +8,7 @@ services:
       - ./backend/.env
     volumes:
       - chroma-data:/app/data/chroma
+      - ./backend/policies:/app/policies
 
 volumes:
   chroma-data:

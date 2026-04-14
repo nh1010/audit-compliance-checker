@@ -1,4 +1,4 @@
-import type { UploadResponse, ParsedQuestion, AnalysisResult } from "./types";
+import type { UploadResponse, ParsedQuestion, ParseEvent, AnalysisResult } from "./types";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
@@ -10,15 +10,63 @@ export async function uploadFile(file: File): Promise<UploadResponse> {
   return res.json();
 }
 
-export async function parseAudit(fileId: string): Promise<ParsedQuestion[]> {
-  const res = await fetch(`${API_URL}/api/audit/parse`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ file_id: fileId }),
-  });
-  if (!res.ok) throw new Error(await res.text());
-  const data = await res.json();
-  return data.questions;
+const PARSE_TIMEOUT_MS = 10 * 60 * 1000;
+
+export async function parseAuditStream(
+  fileId: string,
+  onEvent: (event: ParseEvent) => void,
+): Promise<void> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), PARSE_TIMEOUT_MS);
+
+  try {
+    const res = await fetch(`${API_URL}/api/audit/parse`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ file_id: fileId }),
+      signal: controller.signal,
+    });
+    if (!res.ok) throw new Error(await res.text());
+
+    const reader = res.body?.getReader();
+    if (!reader) throw new Error("No response body");
+
+    const decoder = new TextDecoder();
+    let buffer = "";
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+
+      const lines = buffer.split("\n");
+      buffer = lines.pop() || "";
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed.startsWith("data: ")) continue;
+        const payload = trimmed.slice(6);
+        if (payload === "[DONE]") return;
+        try {
+          const parsed = JSON.parse(payload);
+          if (parsed.type === "error") {
+            throw new Error(parsed.message || "Extraction failed");
+          }
+          onEvent(parsed as ParseEvent);
+        } catch (e) {
+          if (e instanceof Error && e.message !== "Extraction failed") continue;
+          throw e;
+        }
+      }
+    }
+  } catch (err) {
+    if (err instanceof DOMException && err.name === "AbortError") {
+      throw new Error("Requirement extraction timed out. The document may be too large.");
+    }
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 const MAX_RETRIES = 3;

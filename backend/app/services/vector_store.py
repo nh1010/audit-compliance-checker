@@ -6,7 +6,7 @@ from pathlib import Path
 import chromadb
 from chromadb import EmbeddingFunction, Embeddings, Documents
 from google import genai
-from httpx import RemoteProtocolError, ReadTimeout
+from httpx import ConnectError, RemoteProtocolError, ReadTimeout, TransportError
 
 logger = logging.getLogger(__name__)
 
@@ -37,14 +37,14 @@ class GoogleEmbeddingFunction(EmbeddingFunction[Documents]):
             all_embeddings.extend(e.values for e in response.embeddings)
         return all_embeddings
 
-    def _embed_batch_with_retry(self, texts: list[str], max_retries: int = 4):
+    def _embed_batch_with_retry(self, texts: list[str], max_retries: int = 5):
         for attempt in range(max_retries):
             try:
                 return self._client.models.embed_content(
                     model=EMBEDDING_MODEL,
                     contents=texts,
                 )
-            except (RemoteProtocolError, ReadTimeout, ConnectionError) as e:
+            except (TransportError, ConnectionError, OSError) as e:
                 if attempt == max_retries - 1:
                     raise
                 wait = 2 ** attempt

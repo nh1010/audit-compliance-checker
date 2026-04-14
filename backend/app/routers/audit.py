@@ -1,22 +1,64 @@
-from fastapi import APIRouter, HTTPException
+import asyncio
+import json
+import logging
+from queue import Queue, Empty
 
-from app.models.schemas import ParseRequest, ParseResponse
-from app.services.pdf_parser import parse_audit_questions
+from fastapi import APIRouter
+from fastapi.responses import StreamingResponse
+
+from app.models.schemas import ParseRequest
+from app.services.requirement_extractor import stream_requirements
 from app.routers.upload import get_upload_path
 
+logger = logging.getLogger(__name__)
 router = APIRouter()
 
+_SENTINEL = object()
 
-@router.post("/api/audit/parse", response_model=ParseResponse)
+
+def _run_generator_to_queue(pdf_path: str, q: Queue) -> None:
+    """Run the blocking generator in a thread, pushing events into a queue."""
+    try:
+        for event in stream_requirements(pdf_path):
+            q.put(event)
+    except Exception as e:
+        q.put({"type": "error", "message": str(e)})
+    finally:
+        q.put(_SENTINEL)
+
+
+@router.post("/api/audit/parse")
 async def parse_audit(req: ParseRequest):
     path = get_upload_path(req.file_id)
 
-    try:
-        questions = parse_audit_questions(path)
-    except Exception as e:
-        raise HTTPException(status_code=422, detail=f"Failed to parse audit PDF: {e}")
+    q: Queue = Queue()
+    loop = asyncio.get_running_loop()
+    loop.run_in_executor(None, _run_generator_to_queue, path, q)
 
-    if not questions:
-        raise HTTPException(status_code=422, detail="No questions could be extracted from the PDF")
+    async def event_stream():
+        while True:
+            try:
+                item = q.get_nowait()
+            except Empty:
+                await asyncio.sleep(0.1)
+                continue
 
-    return ParseResponse(questions=questions)
+            if item is _SENTINEL:
+                yield "data: [DONE]\n\n"
+                break
+
+            if isinstance(item, dict) and item.get("type") == "error":
+                yield f"data: {json.dumps(item)}\n\n"
+                yield "data: [DONE]\n\n"
+                break
+
+            yield f"data: {json.dumps(item)}\n\n"
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
+    )

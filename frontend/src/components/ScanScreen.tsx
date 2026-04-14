@@ -201,16 +201,12 @@ export default function ScanScreen({ questions, error, onComplete }: ScanScreenP
                 </div>
               )}
             </div>
-          ) : allDone ? (
+          ) : (
             <div className="flex-1 flex items-center justify-center">
               <div className="text-center">
                 <span className="w-[7px] h-[7px] rounded-full bg-ok inline-block mb-2" />
                 <p className="text-[13px] text-txt-2">All requirements analyzed</p>
               </div>
-            </div>
-          ) : (
-            <div className="flex-1 flex items-center justify-center">
-              <p className="text-[12px] text-txt-3">Waiting for questions...</p>
             </div>
           )}
         </div>

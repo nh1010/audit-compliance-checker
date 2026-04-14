@@ -2,10 +2,12 @@ import asyncio
 import json
 import os
 import logging
+import time
 from typing import AsyncGenerator, Callable
 
 from google import genai
 from google.genai import types
+from httpx import TransportError
 
 from app.models.schemas import ParsedQuestion, AnalysisResult
 
@@ -174,16 +176,27 @@ def _analyze_batch_sync(
     prompt = _build_prompt(questions, all_chunks)
     expected = [q.number for q in questions]
 
-    response = client.models.generate_content(
-        model="gemini-2.5-flash",
-        contents=prompt,
-        config=types.GenerateContentConfig(
-            system_instruction=SYSTEM_PROMPT,
-            temperature=0.1,
-        ),
-    )
-
-    text = response.text or ""
+    max_retries = 5
+    text = ""
+    for attempt in range(max_retries):
+        try:
+            response = client.models.generate_content(
+                model="gemini-2.5-flash",
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    system_instruction=SYSTEM_PROMPT,
+                    temperature=0.1,
+                ),
+            )
+            text = response.text or ""
+            break
+        except (TransportError, ConnectionError, OSError) as e:
+            if attempt == max_retries - 1:
+                raise
+            wait = 2 ** attempt
+            logger.warning("Gemini API error (attempt %d/%d), retrying in %ds: %s",
+                           attempt + 1, max_retries, wait, e)
+            time.sleep(wait)
     if not text.strip():
         logger.error("Gemini returned empty response for questions %s", expected)
         return [
